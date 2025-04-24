@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Streamer</title>
+    <style>
+        #progressContainer {
+            width: 100%;
+            max-width: 600px;
+            background-color: #f3f3f3;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin: 20px auto;
+            display: none;
+        }
+        #progressBar {
+            width: 0%;
+            height: 20px;
+            background-color: #4caf50;
+            border-radius: 5px;
+        }
+        #statusMessage {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Upload Video to Stream</h1>
+    <label for="serverUrl">RTMP Server URL:</label>
+    <input type="text" id="serverUrl" value="rtmps://live-api-s.facebook.com:443/rtmp/" placeholder="e.g., rtmps://live-api-s.facebook.com:443/rtmp">
+    <br>
+    <label for="streamKey">Stream Key:</label>
+    <input type="text" id="streamKey" value="FB-704632118905087-0-Ab02h4MS6bKIeOBuw_WHlKbf" placeholder="Enter your stream key">
+    <br>
+    <input type="file" id="videoFile" accept="video/*">
+    <button type="button" onclick="uploadFile()">Stream Video</button>
+    <div id="progressContainer">
+        <div id="progressBar"></div>
+    </div>
+    <p id="statusMessage"></p>
+
+    <script>
+        function uploadFile() {
+            const serverUrl = document.getElementById("serverUrl").value.trim();
+            const streamKey = document.getElementById("streamKey").value.trim();
+            const file = document.getElementById("videoFile").files[0];
+            const statusMessage = document.getElementById("statusMessage");
+            const progressContainer = document.getElementById("progressContainer");
+            const progressBar = document.getElementById("progressBar");
+
+            if (!serverUrl || !streamKey) {
+                alert("Please enter both the RTMP server URL and stream key.");
+                return;
+            }
+
+            if (!file) {
+                alert("Please select a video file.");
+                return;
+            }
+
+            const rtmpUrl = `${serverUrl}/${streamKey}`;
+            const formData = new FormData();
+            formData.append("video", file);
+            formData.append("rtmpUrl", rtmpUrl);
+
+            statusMessage.textContent = "Uploading...";
+            progressContainer.style.display = "block";
+            progressBar.style.width = "0%";
+
+            // Start listening for progress updates
+            const eventSource = new EventSource("/progress");
+            eventSource.addEventListener("progress", (event) => {
+                const data = JSON.parse(event.data);
+                statusMessage.textContent = `Streaming progress: ${data.time}`;
+            });
+
+            eventSource.addEventListener("complete", (event) => {
+                const data = JSON.parse(event.data);
+                statusMessage.textContent = data.message;
+                progressBar.style.width = "100%";
+                eventSource.close();
+            });
+
+            eventSource.addEventListener("error", (event) => {
+                const data = JSON.parse(event.data);
+                statusMessage.textContent = data.message;
+                eventSource.close();
+            });
+
+            // Upload the file
+            fetch("/upload", {
+                method: "POST",
+                body: formData,
+            }).catch((err) => {
+                console.error(err);
+                statusMessage.textContent = "An error occurred while uploading the video.";
+            });
+        }
+    </script>
+</body>
+</html>
